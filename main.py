@@ -1,15 +1,14 @@
-from datetime import date, datetime, timedelta
-from parser import parse_page_links
-from typing import List
-import asyncio
 import aiohttp
-
-import requests
+import asyncio
+from datetime import date, datetime, timedelta
+from typing import List
 from pandas import DataFrame
 
-from base import get_session
+from parser import parse_page_links
+from base import get_async_session
 from models import ExchangeProduct
 from utils import extract_table, filter_needed_columns, get_data
+
 
 
 def df_to_models(df: DataFrame, current_date = date.today()) -> List[ExchangeProduct]:
@@ -38,29 +37,46 @@ def df_to_models(df: DataFrame, current_date = date.today()) -> List[ExchangePro
         products.append(product)
     return products
 
+async def fetch_page(url: str) -> str:
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            return await resp.text()
 
-async def save_to_db(products: List[ExchangeProduct]) -> None:
-    session_gen = get_session()
-    session = next(session_gen)
 
-    session.add_all(products)
-    session.commit()
-    session.close()
+async def get_raw_data(file_url: str, date_: date):
+    content = get_data(file_url)
+    table = extract_table(content)
+    table = filter_needed_columns(table)
+    return df_to_models(table, date_)
+
+
+async def save_to_db(products: List[ExchangeProduct]):
+    async with get_async_session() as session:
+        session.add_all(products)
+        await session.commit()
+
+
+async def process_link(link):
+    file_url, file_date = link
+    products = await get_raw_data(file_url, file_date)
+    await save_to_db(products)
+
+
+async def main():
+    url = "https://spimex.com/markets/oil_products/trades/results/"
+    html = await fetch_page(url)
+
+    end_date = date.today()
+    start_date = end_date - timedelta(days=730)
+    links = parse_page_links(html, start_date, end_date, url)
+
+    sem = asyncio.Semaphore(5)
+    async def limited(link):
+        async with sem:
+            await process_link(link)
+
+    await asyncio.gather(*(limited(link) for link in links))
 
 
 if __name__ == "__main__":
-
-    url = "https://spimex.com/markets/oil_products/trades/results/"
-    response = requests.get(url)
-    end_date = date.today()
-    start_date = end_date - timedelta(days=730)
-
-    links = parse_page_links(response.content, start_date, end_date, url)
-
-    for link in links:
-        file_url, date = link
-        table = get_data([file_url, date])
-        table = extract_table(table)
-        table = filter_needed_columns(table)
-        products = df_to_models(table)
-        save_to_db(products)
+    asyncio.run(main())
