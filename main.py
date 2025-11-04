@@ -1,6 +1,8 @@
 from datetime import date, datetime, timedelta
 from parser import parse_page_links
 from typing import List
+import asyncio
+import aiohttp
 
 import requests
 from pandas import DataFrame
@@ -37,7 +39,7 @@ def df_to_models(df: DataFrame, current_date = date.today()) -> List[ExchangePro
     return products
 
 
-def save_to_db(products: List[ExchangeProduct]) -> None:
+async def save_to_db(products: List[ExchangeProduct]) -> None:
     session_gen = get_session()
     session = next(session_gen)
 

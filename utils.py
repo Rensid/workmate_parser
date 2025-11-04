@@ -7,8 +7,8 @@ import requests
 from pandas import DataFrame
 
 
-def get_data(link: list):
-    response = requests.get(link[0])
+def get_data(link: str):
+    response = requests.get(link)
     data = response.content
     byty_file = BytesIO(data)
     df = pd.read_excel(byty_file, engine="xlrd")
@@ -31,7 +31,6 @@ def extract_table(
     if not markers:
         raise ValueError("Не найдено ни одной строки с 'Единица измерения:'")
 
-    print("Найдены таблицы, начинающиеся на строках:", markers)
 
     target_idx: Optional[int] = None
     for i in markers:

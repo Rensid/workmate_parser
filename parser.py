@@ -1,5 +1,4 @@
 from datetime import date, datetime
-from pathlib import Path
 from typing import List, Tuple
 from urllib.parse import urljoin
 

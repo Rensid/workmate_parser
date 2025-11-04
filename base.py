@@ -1,18 +1,27 @@
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from config import SYNC_DATABASE, DATABASE
+from contextlib import asynccontextmanager
 
-from config import SYNC_DATABASE
+engine = create_async_engine(
+    DATABASE,
+    echo=False,
+    pool_size=5,
+    max_overflow=10,
+    pool_pre_ping=True,
+)
+async_session = async_sessionmaker(engine, expire_on_commit=False)
 
-engine = create_engine(SYNC_DATABASE, pool_pre_ping=True)
 
-session_maker = sessionmaker(engine, expire_on_commit=False)
-
-
-def get_session():
-    with session_maker() as session:
+@asynccontextmanager
+async def get_async_session():
+    session = async_session()
+    try:
         yield session
+    finally:
+        await session.close()
 
 
 class Base(DeclarativeBase):
